@@ -1,0 +1,15 @@
+{
+  "title": "sfdvr",
+  "artist": "sdsdv",
+  "album": "sdfsd",
+  "genres": [
+    "Pop",
+    "Hip-Hop"
+  ],
+  "coverImage": "",
+  "slug": "sfdvr",
+  "id": "1745326333221",
+  "createdAt": "2025-04-22T12:52:13.221Z",
+  "updatedAt": "2025-04-22T17:46:09.937Z",
+  "audioFile": "test2.mp3"
+}
