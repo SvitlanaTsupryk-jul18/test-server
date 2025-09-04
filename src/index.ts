@@ -1,4 +1,4 @@
-import Fastify from 'fastify';
+import Fastify, { FastifyInstance } from 'fastify';
 import cors from '@fastify/cors';
 import multipart from '@fastify/multipart';
 import fastifyStatic from '@fastify/static';
@@ -9,48 +9,33 @@ import routes from './routes';
 import { initializeDb } from './utils/db';
 import config from './config';
 
-async function start() {
-  try {
-    // Log configuration on startup
-    console.log(`Starting server in ${config.server.env} mode`);
-    
-    // Initialize database
+// Singleton Fastify instance for cold/warm start
+let fastify: FastifyInstance | undefined;
+
+async function buildServer(): Promise<FastifyInstance> {
+  if (!fastify) {
+    fastify = Fastify({ logger: false });
+
     await initializeDb();
-    
-    const fastify = Fastify({
-      logger: {
-        level: config.logger.level,
-        transport: config.isDevelopment ? {
-          target: 'pino-pretty',
-          options: {
-            translateTime: 'HH:MM:ss Z',
-            ignore: 'pid,hostname',
-          },
-        } : undefined,
-      }
-    });
-    
-    // Register plugins
+
     await fastify.register(cors, {
       origin: config.cors.origin,
       methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
       allowedHeaders: ['Content-Type', 'Authorization'],
     });
-    
+
     await fastify.register(multipart, {
       limits: {
         fileSize: config.upload.maxFileSize,
       }
     });
-    
-    // Serve static files (uploads)
+
     await fastify.register(fastifyStatic, {
       root: config.storage.uploadsDir,
       prefix: '/api/files/',
       decorateReply: false,
     });
-    
-    // Register Swagger
+
     await fastify.register(swagger, {
       openapi: {
         info: {
@@ -60,8 +45,7 @@ async function start() {
         }
       }
     });
-    
-    // Register Swagger UI
+
     await fastify.register(swaggerUi, {
       routePrefix: '/documentation',
       uiConfig: {
@@ -69,22 +53,18 @@ async function start() {
         deepLinking: true
       }
     });
-    
-    // Register routes
+
     await fastify.register(routes);
-    
-    // Start server
-    await fastify.listen({ 
-      port: config.server.port, 
-      host: config.server.host 
-    });
-    
-    console.log(`Server is running on http://${config.server.host}:${config.server.port}`);
-    console.log(`Swagger documentation available on http://${config.server.host}:${config.server.port}/documentation`);
-  } catch (error) {
-    console.error('Error starting server:', error);
-    process.exit(1);
+
+    await fastify.ready();
   }
+  return fastify;
 }
 
-start();
+// Vercel Serverless Function Handler for TypeScript
+import type { IncomingMessage, ServerResponse } from 'http';
+
+export default async function handler(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  const app = await buildServer();
+  app.server.emit('request', req, res);
+}
